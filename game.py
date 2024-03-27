@@ -27,11 +27,11 @@ class Box:
 
 
 class SnakeBox:
-    x: int
+    x: int  # Relative coordinates from center
     y: int
     type_: str # snake body type(body, head or tail)
     state: str # state(up, left, down, right)
-    sprite: Image
+    sprite: Image   # image sprite
     last_tail_place: tuple[int, int] 
 
     # Creating Snake Box (body by default)
@@ -41,6 +41,7 @@ class SnakeBox:
         self.type_ = type_
         self.state = state
     
+    # Updates image sprite
     def update_sprite(self) -> None:
         if self.type_ == "body":
             self.sprite = Image.open(BASE_SPRITE_PATH + "body.png")
@@ -50,6 +51,7 @@ class SnakeBox:
         if self.type_ == "tail":
             self.last_tail_place = (self.x, self.y)
     
+    # Move snake box in specific direction
     def move_dir(self, direction: str) -> tuple[int, int]:
         dx = 0
         dy = 0
@@ -68,6 +70,7 @@ class SnakeBox:
         self.state = direction
         return self.x, self.y
 
+    # Move snake box to specific coordinates
     def move_coordinates(self, x: int, y: int) -> None:
         if x < self.x:
             self.state = "left"
@@ -80,35 +83,57 @@ class SnakeBox:
         self.x = x
         self.y = y
 
+    # Draw snake box
     def draw(self, field: Image) -> None:
-        self.update_sprite()
-        field.paste(self.sprite, ((MAX_X_SIZE // 2 + self.x) * 36, (MAX_Y_SIZE // 2 + self.y) * 36))
+        self.update_sprite() # Updating sprite
+        field.paste(self.sprite, ((MAX_X_SIZE // 2 + self.x) * 36, (MAX_Y_SIZE // 2 + self.y) * 36)) # As coordinates are relative we should divide them by 2. 36 is a block size
 
 class Snake:
-    snake_boxes = []
-    history = []
+    snake_boxes = [] # All snake body(head, body and tail)
+    history = [] # Snake moving history
+    direction: str
+
     # Creating Snake
     def __init__(self) -> None:
-        head = SnakeBox(0, 0, "head", "left")
-        body = [SnakeBox(1, 0), SnakeBox(2, 0), SnakeBox(3, 0)]
-        tail = SnakeBox(4, 0, "tail", "left")
-        
+        head = SnakeBox(0, 0, "head", "left") # Creating snake head in initial position(0, 0)
+        body = [SnakeBox(1, 0), SnakeBox(2, 0), SnakeBox(3, 0)] # Creating snake body in initial positions
+        tail = SnakeBox(4, 0, "tail", "left") # Creating Snake tail in initial position
+        self.direction = "left"
+        # Put it all together
         self.snake_boxes.append(head)
         self.snake_boxes.extend(body)
         self.snake_boxes.append(tail)
+
+        # Update history
         self.history = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
     
+    # Draw all snake sprites on screen
     def draw_snake(self, field: Image) -> None:
         for snake_box in self.snake_boxes:
             snake_box.draw(field)
     
-    def move(self, direction: str) -> None:
-        new_head_position = self.snake_boxes[0].move_dir(direction)
+    def move(self) -> None:
+        # Snake moving logic
+        # First step - we are moving snake head in specific direction and insert new position in the start of our history list
+        new_head_position = self.snake_boxes[0].move_dir(self.direction)
         self.history.insert(0, new_head_position)
+
+        # Second step - for every body tile we get the next body tile previous position and move it
         for segment_num in range(1, len(self.snake_boxes)):
             self.snake_boxes[segment_num].move_coordinates(*self.history[segment_num])
+        
         self.snake_boxes[-1].move_coordinates(*self.history[-2])
         self.history.pop()
+    
+    def set_direction(self, direction: str):
+        possible_directions = {
+            "left": ["up", "down"],
+            "right": ["up", "down"],
+            "up": ["left", "right"],
+            "down": ["left", "right"]
+        }
+        if direction in possible_directions[self.direction]:
+            self.direction = direction
 
 
 class Game:
@@ -134,35 +159,25 @@ class Game:
         self.screen.image = new_img
         self.root.after(100, self.draw_fields)
     
-    def move(self, direction: str) -> None:
+    def move(self) -> None:
+        self.snake.move()
+        self.root.after(1000 // SPEED, self.move)
+
+    def set_direction(self, event) -> None:
+        pressed_key = event.keysym
         directions = {
             "w": "up",
             "d": "right",
             "s": "down",
             "a": "left"
         }
-        self.snake.move(directions.get(direction, "skip"))
-    
-    def check_move(self):
-        pressed = list(map(keyboard.is_pressed, ("a", "s", "w", "d")))
-        if any(pressed):
-            pressed_key = ""
-            if keyboard.is_pressed("a"):
-                pressed_key = "a"
-            elif keyboard.is_pressed("w"):
-                pressed_key = "w"
-            elif keyboard.is_pressed("s"):
-                pressed_key = "s"
-            elif keyboard.is_pressed("d"):
-                pressed_key = "d"
-            self.move(pressed_key)
-        else:
-            self.move("skip")
-        self.root.after(1000 // SPEED, self.check_move)
+        if pressed_key in ['a', 's', 'd', 'w']:
+            self.snake.set_direction(directions[pressed_key])
 
     def play(self) -> None:
         self.root.after(0, self.draw_fields)
-        self.root.after(1000 // SPEED, self.check_move)
+        self.root.after(1000 // SPEED, self.move)
+        self.root.bind("<KeyPress>", self.set_direction)
         self.root.mainloop()
 
 if __name__ == "__main__":
